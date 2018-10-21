@@ -13,6 +13,7 @@ import utils
 # The topic to publish control commands to
 PUB_TOPIC = '/vesc/high_level/ackermann_cmd_mux/input/nav_0' 
 
+# TIM
 '''
 Follows a given plan using constant velocity and PID control of the steering angle
 '''

@@ -78,6 +78,8 @@ class LineFollower:
               the configuration is in front or behind the robot
             If the configuration is in front of the robot, break out of the loop
         """
+        print "inside compute_error"
+        print "len of self.plan %d" % len(self.plan)
         while len(self.plan) > 0:
             # YOUR CODE HERE
 
@@ -85,6 +87,8 @@ class LineFollower:
 
         # Check if the plan is empty. If so, return (False, 0.0)
         # YOUR CODE HERE
+        if len(self.plan) == 0:
+            return False, 0.0
 
         # At this point, we have removed configurations from the plan that are behind
         # the robot. Therefore, element 0 is the first configuration in the plan that is in
@@ -96,11 +100,21 @@ class LineFollower:
         # Compute the translation error between the robot and the configuration at goal_idx in the plan
         # YOUR CODE HERE
 
+        print cur_pose
+        print self.plan[goal_idx]
+
+        translation_error = np.sqrt(np.square(cur_pose[1] - self.plan[goal_idx][1]) + np.square(cur_pose[2] - self.plan[goal_idx][2]))
+
+        print translation_error
+
         # Compute the total error
         # Translation error was computed above
         # Rotation error is the difference in yaw between the robot and goal configuration
         #   Be careful about the sign of the rotation error
         # YOUR CODE HERE
+        rot_error = cur_pose[2] - self.plan[goal_idx][2]
+        print rot_error
+
         error = 0  # TODO: self.translation_weight * translation_error + self.rotation_weight * rotation_error
 
         return True, error
@@ -192,13 +206,22 @@ def main():
 
     raw_plan = rospy.wait_for_message(plan_topic, PoseArray)
 
+    # raw_plan is a PoseArray which has an array of geometry_msgs/Pose called poses
+
+    path_len = len(raw_plan.poses)
+
+    plan_array = []
+
+    for pose in raw_plan.poses:
+        plan_array.append(np.array([pose.position.x, pose.position.y, utils.quaternion_to_angle(pose.orientation)]))
+
+    print "len of plan array %d" % len(plan_array)
+
     try:
         if raw_plan:
             pass
     except rospy.ROSException:
         exit(1)
-
-    plan_array = [[], [], []]   # TODO: Process raw_plan to the format above
 
     lf = LineFollower(plan_array, pose_topic, plan_lookahead, translation_weight,
                       rotation_weight, kp, ki, kd, error_buff_length, speed)  # Create a Line follower

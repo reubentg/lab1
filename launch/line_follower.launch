@@ -1,7 +1,7 @@
 <launch>
 
     <node pkg="lab1" type="line_follower.py" name="LineFollow" output="screen">
-
+    <param name="plan_topic" type="str" value="/planner_node/car_plan" /> <!-- Passes a bounds checking boolean to the script -->
     </node>
 
 </launch>

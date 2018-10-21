@@ -55,8 +55,8 @@ class LineFollower:
         self.speed = speed
 
         # YOUR CODE HERE
-        self.cmd_pub = # Create a publisher to PUB_TOPIC
-        self.pose_sub = # Create a subscriber to pose_topic, with callback 'self.pose_cb'
+        self.cmd_pub = rospy.Publisher(PUB_TOPIC, PoseStamped, queue_size=10)# Create a publisher to PUB_TOPIC
+        self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_cb)# Create a subscriber to pose_topic, with callback 'self.pose_cb'
   
     '''
     Computes the error based on the current pose of the car
@@ -166,7 +166,7 @@ def main():
     'Starting' values are ones you should consider tuning for your system
     """
     # YOUR CODE HERE
-    plan_topic = # Default val: '/planner_node/car_plan'
+    plan_topic = rospy.get_param('~plan_topic')# Default val: '/planner_node/car_plan'
     pose_topic = # Default val: '/sim_car_pose/pose'
     plan_lookahead = # Starting val: 5
     translation_weight = # Starting val: 1.0

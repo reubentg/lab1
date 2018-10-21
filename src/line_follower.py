@@ -13,10 +13,12 @@ import utils
 # The topic to publish control commands to
 PUB_TOPIC = '/vesc/high_level/ackermann_cmd_mux/input/nav_0' 
 
-# TIM
+
 '''
 Follows a given plan using constant velocity and PID control of the steering angle
 '''
+
+
 class LineFollower:
 
     """
@@ -37,7 +39,7 @@ class LineFollower:
     speed: The speed at which the robot should travel
     """
     def __init__(self, plan, pose_topic, plan_lookahead, translation_weight,
-                   rotation_weight, kp, ki, kd, error_buff_length, speed):
+                 rotation_weight, kp, ki, kd, error_buff_length, speed):
         # Store the passed parameters
         self.plan = plan
         self.plan_lookahead = plan_lookahead
@@ -55,8 +57,10 @@ class LineFollower:
         self.speed = speed
 
         # YOUR CODE HERE
-        self.cmd_pub = rospy.Publisher(PUB_TOPIC, PoseStamped, queue_size=10)# Create a publisher to PUB_TOPIC
-        self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_cb)# Create a subscriber to pose_topic, with callback 'self.pose_cb'
+        self.cmd_pub = rospy.Publisher(PUB_TOPIC, PoseStamped, queue_size=10)  # Create a publisher to PUB_TOPIC
+
+        # Create a subscriber to pose_topic, with callback 'self.pose_cb'
+        self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_cb)
   
     '''
     Computes the error based on the current pose of the car
@@ -75,9 +79,9 @@ class LineFollower:
             If the configuration is in front of the robot, break out of the loop
         """
         while len(self.plan) > 0:
-          # YOUR CODE HERE
+            # YOUR CODE HERE
 
-          pass
+            pass
 
         # Check if the plan is empty. If so, return (False, 0.0)
         # YOUR CODE HERE
@@ -97,10 +101,9 @@ class LineFollower:
         # Rotation error is the difference in yaw between the robot and goal configuration
         #   Be careful about the sign of the rotation error
         # YOUR CODE HERE
-        error = # self.translation_weight * translation_error + self.rotation_weight * rotation_error
+        error = 0  # TODO: self.translation_weight * translation_error + self.rotation_weight * rotation_error
 
         return True, error
-    
     
     '''
     Uses a PID control policy to generate a steering angle from the passed error
@@ -108,7 +111,7 @@ class LineFollower:
     Returns: The steering angle that should be executed
     '''
     def compute_steering_angle(self, error):
-        now = rospy.Time.now().to_sec() # Get the current time
+        now = rospy.Time.now().to_sec()  # Get the current time
 
         # Compute the derivative error using the passed error, the current time,
         # the most recent error stored in self.error_buff, and the most recent time
@@ -119,12 +122,13 @@ class LineFollower:
         self.error_buff.append((error, now))
 
         # Compute the integral error by applying rectangular integration to the elements
-        # of self.error_buff: https://chemicalstatistician.wordpress.com/2014/01/20/rectangular-integration-a-k-a-the-midpoint-rule/
+        # of self.error_buff:
+        # ://chemicalstatistician.wordpress.com/2014/01/20/rectangular-integration-a-k-a-the-midpoint-rule/
         # YOUR CODE HERE
 
         # Compute the steering angle as the sum of the pid errors
         # YOUR CODE HERE
-        return #self.kp*error + self.ki*integ_error + self.kd * deriv_error
+        return  # self.kp*error + self.ki*integ_error + self.kd * deriv_error
     
     '''
     Callback for the current pose of the car
@@ -132,15 +136,16 @@ class LineFollower:
     This is the exact callback that we used in our solution, but feel free to change it
     '''
     def pose_cb(self, msg):
+        print 'Inside pose_cb'
         cur_pose = np.array([msg.pose.position.x,
                              msg.pose.position.y,
                              utils.quaternion_to_angle(msg.pose.orientation)])
         success, error = self.compute_error(cur_pose)
 
         if not success:
-          # We have reached our goal
-          self.pose_sub = None # Kill the subscriber
-          self.speed = 0.0 # Set speed to zero so car stops
+            # We have reached our goal
+            self.pose_sub = None  # Kill the subscriber
+            self.speed = 0.0  # Set speed to zero so car stops
 
         delta = self.compute_steering_angle(error)
 
@@ -154,9 +159,10 @@ class LineFollower:
         # Send the control message
         self.cmd_pub.publish(ads)
 
+
 def main():
 
-    rospy.init_node('line_follower', anonymous=True) # Initialize the node
+    rospy.init_node('line_follower', anonymous=True)  # Initialize the node
     """
     Load these parameters from launch file
     We provide suggested starting values of params, but you should
@@ -166,16 +172,16 @@ def main():
     'Starting' values are ones you should consider tuning for your system
     """
     # YOUR CODE HERE
-    plan_topic = rospy.get_param('~plan_topic')# Default val: '/planner_node/car_plan'
-    pose_topic = # Default val: '/sim_car_pose/pose'
-    plan_lookahead = # Starting val: 5
-    translation_weight = # Starting val: 1.0
-    rotation_weight = # Starting val: 0.0
-    kp = # Startinig val: 1.0
-    ki = # Starting val: 0.0
-    kd = # Starting val: 0.0
-    error_buff_length = # Starting val: 10
-    speed = # Default val: 1.0
+    plan_topic = rospy.get_param('~plan_topic')  # Default val: '/planner_node/car_plan'
+    pose_topic = rospy.get_param('~pose_topic')  # Default val: '/sim_car_pose/pose'
+    plan_lookahead = rospy.get_param('~plan_lookahead')  # Starting val: 5
+    translation_weight = rospy.get_param('~translation_weight')  # Starting val: 1.0
+    rotation_weight = rospy.get_param('~rotation_weight')  # Starting val: 0.0
+    kp = rospy.get_param('~kp')  # Startinig val: 1.0
+    ki = rospy.get_param('~ki')  # Starting val: 0.0
+    kd = rospy.get_param('~kd')  # Starting val: 0.0
+    error_buff_length = rospy.get_param('~error_buff_length')  # Starting val: 10
+    speed = rospy.get_param('~speed')  # Default val: 1.0
 
     raw_input("Press Enter to when plan available...")  # Waits for ENTER key press
 
@@ -183,9 +189,22 @@ def main():
     # Convert the plan msg to a list of 3-element numpy arrays
     #     Each array is of the form [x,y,theta]
     # Create a LineFollower object
-    # YOUR CODE HERE
 
-    rospy.spin() # Prevents node from shutting down
+    raw_plan = rospy.wait_for_message(plan_topic, PoseArray)
+
+    try:
+        if raw_plan:
+            pass
+    except rospy.ROSException:
+        exit(1)
+
+    plan_array = [[], [], []]   # TODO: Process raw_plan to the format above
+
+    lf = LineFollower(plan_array, pose_topic, plan_lookahead, translation_weight,
+                      rotation_weight, kp, ki, kd, error_buff_length, speed)  # Create a Line follower
+
+    rospy.spin()  # Prevents node from shutting down
+
 
 if __name__ == '__main__':
     main()

@@ -2,6 +2,7 @@
 
 import collections
 import sys
+import math
 
 import rospy
 import numpy as np
@@ -11,7 +12,8 @@ from ackermann_msgs.msg import AckermannDriveStamped
 import utils
 
 # The topic to publish control commands to
-PUB_TOPIC = '/vesc/high_level/ackermann_cmd_mux/input/nav_0' 
+PUB_TOPIC = '/vesc/high_level/ackermann_cmd_mux/input/nav_0'
+WINDOW_WIDTH = 5
 
 
 '''
@@ -57,7 +59,7 @@ class LineFollower:
         self.speed = speed
 
         # YOUR CODE HERE
-        self.cmd_pub = rospy.Publisher(PUB_TOPIC, PoseStamped, queue_size=10)  # Create a publisher to PUB_TOPIC
+        self.cmd_pub = rospy.Publisher(PUB_TOPIC, AckermannDriveStamped, queue_size=10)  # Create a publisher to PUB_TOPIC
 
         # Create a subscriber to pose_topic, with callback 'self.pose_cb'
         self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_cb)
@@ -78,12 +80,21 @@ class LineFollower:
               the configuration is in front or behind the robot
             If the configuration is in front of the robot, break out of the loop
         """
-        print "inside compute_error"
-        print "len of self.plan %d" % len(self.plan)
+        copy_plan = []
         while len(self.plan) > 0:
             # YOUR CODE HERE
+            # for waypoint in self.plan:
+            #     copy_plan.append(np.array([waypoint[0], waypoint[1], waypoint[2] - cur_pose[2]]))
 
-            pass
+            left_edge = cur_pose[2] + np.pi / 2
+            right_edge = cur_pose[2] - np.pi / 2
+            angle_robot_path_point = math.atan2(cur_pose[1] - self.plan[0][1], cur_pose[0] - self.plan[0][0])
+
+            if angle_robot_path_point > right_edge and angle_robot_path_point < left_edge:
+                self.plan.pop(0)
+            break
+        # print "\n\nCopy Plan"
+        # print copy_plan
 
         # Check if the plan is empty. If so, return (False, 0.0)
         # YOUR CODE HERE
@@ -97,25 +108,26 @@ class LineFollower:
         # We call this index the goal_index
         goal_idx = min(0+self.plan_lookahead, len(self.plan)-1)
 
+
         # Compute the translation error between the robot and the configuration at goal_idx in the plan
         # YOUR CODE HERE
 
-        print cur_pose
-        print self.plan[goal_idx]
+        # print cur_pose
+        # print self.plan[goal_idx]
 
         translation_error = np.sqrt(np.square(cur_pose[1] - self.plan[goal_idx][1]) + np.square(cur_pose[2] - self.plan[goal_idx][2]))
 
-        print translation_error
+        # print translation_error
 
         # Compute the total error
         # Translation error was computed above
         # Rotation error is the difference in yaw between the robot and goal configuration
         #   Be careful about the sign of the rotation error
         # YOUR CODE HERE
-        rot_error = cur_pose[2] - self.plan[goal_idx][2]
-        print rot_error
+        rotation_error = cur_pose[2] - self.plan[goal_idx][2]
+        print rotation_error
 
-        error = 0  # TODO: self.translation_weight * translation_error + self.rotation_weight * rotation_error
+        error = self.translation_weight * translation_error + self.rotation_weight * rotation_error
 
         return True, error
     
@@ -132,6 +144,15 @@ class LineFollower:
         # stored in self.error_buff
         # YOUR CODE HERE
 
+        deriv_error = error  # for the first iteration, this is true
+        integ_error = error
+
+        if len(self.error_buff) > 0:
+            time_delta = now - self.error_buff[-1][1]       # -1 means peeking the rightmost element (most recent)
+            error_delta = error - self.error_buff[-1][0]
+
+            deriv_error = error_delta / time_delta
+
         # Add the current error to the buffer
         self.error_buff.append((error, now))
 
@@ -139,10 +160,15 @@ class LineFollower:
         # of self.error_buff:
         # ://chemicalstatistician.wordpress.com/2014/01/20/rectangular-integration-a-k-a-the-midpoint-rule/
         # YOUR CODE HERE
+        error_array = []
+        if len(self.error_buff) > 0:
+            for err in self.error_buff:
+                error_array.append(err[0])
+            integ_error = np.trapz(error_array)
 
         # Compute the steering angle as the sum of the pid errors
         # YOUR CODE HERE
-        return  # self.kp*error + self.ki*integ_error + self.kd * deriv_error
+        return self.kp*error + self.ki*integ_error + self.kd * deriv_error
     
     '''
     Callback for the current pose of the car
@@ -150,7 +176,6 @@ class LineFollower:
     This is the exact callback that we used in our solution, but feel free to change it
     '''
     def pose_cb(self, msg):
-        print 'Inside pose_cb'
         cur_pose = np.array([msg.pose.position.x,
                              msg.pose.position.y,
                              utils.quaternion_to_angle(msg.pose.orientation)])
@@ -162,6 +187,8 @@ class LineFollower:
             self.speed = 0.0  # Set speed to zero so car stops
 
         delta = self.compute_steering_angle(error)
+
+        print "delta is %f" % delta
 
         # Setup the control message
         ads = AckermannDriveStamped()
@@ -216,6 +243,7 @@ def main():
         plan_array.append(np.array([pose.position.x, pose.position.y, utils.quaternion_to_angle(pose.orientation)]))
 
     print "len of plan array %d" % len(plan_array)
+    print plan_array
 
     try:
         if raw_plan:

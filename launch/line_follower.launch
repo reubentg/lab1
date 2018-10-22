@@ -1,5 +1,25 @@
+<!-- -*- mode: XML -*- -->
 <launch>
 
+    <!--
+    plan_topic: The topic that provides the plan as a PoseArray msg
+    pose_topic: The topic that provides the current pose of the robot as a PoseStamped msg
+    plan_lookahead: If the robot is currently closest to the i-th pose in the plan,
+                    then it should navigate towards the (i+plan_lookahead)-th pose in the plan
+    translation_weight: How much the error in translation should be weighted in relation
+                        to the error in rotation
+    rotation_weight: How much the error in rotation should be weighted in relation
+                     to the error in translation
+    kp: The proportional PID parameter
+    ki: The integral PID parameter
+    kd: The derivative PID parameter
+    error_buff_length: The length of the buffer that is storing past error values
+    speed: The speed at which the robot should travel
+    -->
+
+   <!--
+	Launch a line_follower node here
+   -->
     <node pkg="lab1" type="line_follower.py" name="LineFollow" output="screen">
         <param name="plan_topic" type="str" value="/planner_node/car_plan" />
         <param name="pose_topic" type="string" value="/sim_car_pose/pose" />

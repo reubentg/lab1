@@ -13,6 +13,7 @@ import utils
 
 # The topic to publish control commands to
 PUB_TOPIC = '/vesc/high_level/ackermann_cmd_mux/input/nav_0'
+PUB_TOPIC_2 = '/plan_lookahead_follower/pose' # to publish plan lookahead follower to assist with troubleshooting
 WINDOW_WIDTH = 5
 
 
@@ -60,6 +61,7 @@ class LineFollower:
 
         # YOUR CODE HERE
         self.cmd_pub = rospy.Publisher(PUB_TOPIC, AckermannDriveStamped, queue_size=10)  # Create a publisher to PUB_TOPIC
+        self.goal_pub = rospy.Publisher(PUB_TOPIC_2, PoseStamped, queue_size=10) # create a publisher for plan lookahead follower
 
         # Create a subscriber to pose_topic, with callback 'self.pose_cb'
         self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_cb)
@@ -86,12 +88,39 @@ class LineFollower:
             # for waypoint in self.plan:
             #     copy_plan.append(np.array([waypoint[0], waypoint[1], waypoint[2] - cur_pose[2]]))
 
-            left_edge = cur_pose[2] + np.pi / 2
-            right_edge = cur_pose[2] - np.pi / 2
-            angle_robot_path_point = math.atan2(cur_pose[1] - self.plan[0][1], cur_pose[0] - self.plan[0][0])
+            left_edge = (cur_pose[2] + np.pi / 2) * 180 / 3.14 # deg
+            right_edge = (cur_pose[2] - np.pi / 2) * 180 / 3.14 # deg
+            angle_robot_path_point = math.atan2(cur_pose[1] - self.plan[0][1], cur_pose[0] - self.plan[0][0]) * 180 / 3.14 # deg
 
-            if angle_robot_path_point > right_edge and angle_robot_path_point < left_edge:
-                self.plan.pop(0)
+            # for troubleshooting if path points are not deleted correctly
+            # converted angles from rad to deg for easier troubleshooting
+            # print("robot position: ", cur_pose)
+            # print("path point position: ", self.plan[0])
+            # print("left_edge: ", left_edge)
+            # print("right_edge: ", right_edge)
+            # print("path point to robot vector: ",cur_pose[1] - self.plan[0][1], cur_pose[0] - self.plan[0][0])
+            # print("angle of path point to robot vector",angle_robot_path_point)
+            # print("path_point yaw",self.plan[0][2] * 180 / 3.14)
+
+            behind = (angle_robot_path_point > right_edge and angle_robot_path_point < left_edge) # is path point behind robot?
+            path_pose_similar_direction = (self.plan[0][2] > right_edge and self.plan[0][2] < left_edge) # is path point in similar direction as robot?
+            if behind and path_pose_similar_direction and len(self.plan) > 1: # delete point if behind robot, similar direction, and not last point in path
+                print "delete element: ", len(self.plan) # for troubleshooting, show path points before deleting
+                self.plan.pop(0) # delete the first element in the path, since that point is behind robot and it's direction is similar to robot
+                print "element deleted? : ", len(self.plan) # for troubleshooting, show path points after deleting
+
+
+            PS = PoseStamped() # create a PoseStamped() msg
+            PS.header.stamp = rospy.Time.now() # set header timestamp value
+            PS.header.frame_id = "map" # set header frame id value
+            goal_idx = min(0+self.plan_lookahead, len(self.plan)-1) # get goal index for looking ahead this many indices in the path
+            PS.pose.position.x = self.plan[goal_idx][0] # set msg x position to value of the x position in the look ahead pose from the path
+            PS.pose.position.y = self.plan[goal_idx][1] # set msg y position to value of the y position in the look ahead pose from the path
+            PS.pose.position.z = 0 # set msg z position to 0 since robot is on the ground
+            PS.pose.orientation = utils.angle_to_quaternion(self.plan[goal_idx][2]) # set msg orientation to [converted to queternion] value of the yaw angle in the look ahead pose from the path
+
+            self.goal_pub.publish(PS) # publish look ahead follower, now you can add a Pose with topic of PUB_TOPIC_2 value in rviz
+
             break
         # print "\n\nCopy Plan"
         # print copy_plan

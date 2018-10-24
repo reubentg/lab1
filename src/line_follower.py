@@ -3,6 +3,7 @@
 import collections
 import sys
 import math
+import time
 
 import rospy
 import numpy as np
@@ -59,6 +60,12 @@ class LineFollower:
         self.error_buff = collections.deque(maxlen=error_buff_length)
         self.speed = speed
 
+        print "line_follower Initialized!"
+        print "plan[0]", self.plan[0]
+        print "plan[plan_lookahead]", self.plan[plan_lookahead]
+        print "error_buff length: ", len(self.error_buff)
+        print "error_buff: ", self.error_buff
+
         # YOUR CODE HERE
         self.cmd_pub = rospy.Publisher(PUB_TOPIC, AckermannDriveStamped, queue_size=10)  # Create a publisher to PUB_TOPIC
         self.goal_pub = rospy.Publisher(PUB_TOPIC_2, PoseStamped, queue_size=10) # create a publisher for plan lookahead follower
@@ -82,11 +89,9 @@ class LineFollower:
               the configuration is in front or behind the robot
             If the configuration is in front of the robot, break out of the loop
         """
-        copy_plan = []
-        while len(self.plan) > 0:
-            # YOUR CODE HERE
-            # for waypoint in self.plan:
-            #     copy_plan.append(np.array([waypoint[0], waypoint[1], waypoint[2] - cur_pose[2]]))
+        print "Computing error..."
+        # check the leftmost pose in the plan pose-array and if it is behind the car then delete it
+        if len(self.plan) > 0:
 
             left_edge = (cur_pose[2] + np.pi / 2) * 180 / 3.14 # deg
             right_edge = (cur_pose[2] - np.pi / 2) * 180 / 3.14 # deg
@@ -104,7 +109,7 @@ class LineFollower:
 
             behind = (angle_robot_path_point > right_edge and angle_robot_path_point < left_edge) # is path point behind robot?
             path_pose_similar_direction = (self.plan[0][2] > right_edge and self.plan[0][2] < left_edge) # is path point in similar direction as robot?
-            if behind and path_pose_similar_direction and len(self.plan) > 1: # delete point if behind robot, similar direction, and not last point in path
+            if behind and path_pose_similar_direction and len(self.plan) > 0: # delete point if behind robot, similar direction, and not last point in path
                 print "delete element: ", len(self.plan) # for troubleshooting, show path points before deleting
                 self.plan.pop(0) # delete the first element in the path, since that point is behind robot and it's direction is similar to robot
                 print "element deleted? : ", len(self.plan) # for troubleshooting, show path points after deleting
@@ -121,10 +126,6 @@ class LineFollower:
 
             self.goal_pub.publish(PS) # publish look ahead follower, now you can add a Pose with topic of PUB_TOPIC_2 value in rviz
 
-            break
-        # print "\n\nCopy Plan"
-        # print copy_plan
-
         # Check if the plan is empty. If so, return (False, 0.0)
         # YOUR CODE HERE
         if len(self.plan) == 0:
@@ -140,13 +141,11 @@ class LineFollower:
 
         # Compute the translation error between the robot and the configuration at goal_idx in the plan
         # YOUR CODE HERE
+        print "cur_pose: ", cur_pose
+        print "lookahead pose: ", self.plan[goal_idx]
+        translation_error = np.sqrt(np.square(cur_pose[0] - self.plan[goal_idx][0]) + np.square(cur_pose[1] - self.plan[goal_idx][1]))
 
-        # print cur_pose
-        # print self.plan[goal_idx]
-
-        translation_error = np.sqrt(np.square(cur_pose[1] - self.plan[goal_idx][1]) + np.square(cur_pose[2] - self.plan[goal_idx][2]))
-
-        # print translation_error
+        print "Translation error: ", translation_error
 
         # Compute the total error
         # Translation error was computed above
@@ -154,9 +153,10 @@ class LineFollower:
         #   Be careful about the sign of the rotation error
         # YOUR CODE HERE
         rotation_error = cur_pose[2] - self.plan[goal_idx][2]
-        print rotation_error
+        print "Rotation error: ", rotation_error
 
         error = self.translation_weight * translation_error + self.rotation_weight * rotation_error
+        print "Overall error: ", error
 
         return True, error
     
@@ -166,6 +166,7 @@ class LineFollower:
     Returns: The steering angle that should be executed
     '''
     def compute_steering_angle(self, error):
+        print "Computing steering angle..."
         now = rospy.Time.now().to_sec()  # Get the current time
 
         # Compute the derivative error using the passed error, the current time,
@@ -173,14 +174,16 @@ class LineFollower:
         # stored in self.error_buff
         # YOUR CODE HERE
 
-        deriv_error = error  # for the first iteration, this is true
-        integ_error = error
-
+        deriv_error = 0  # for the first iteration, this is true
+        integ_error = 0
+        print "setting deriv and integ error to 0"
+        print "error_buff len", len(self.error_buff)
         if len(self.error_buff) > 0:
             time_delta = now - self.error_buff[-1][1]       # -1 means peeking the rightmost element (most recent)
             error_delta = error - self.error_buff[-1][0]
 
             deriv_error = error_delta / time_delta
+            print "computed deriv error: ", deriv_error
 
         # Add the current error to the buffer
         self.error_buff.append((error, now))
@@ -194,10 +197,11 @@ class LineFollower:
             for err in self.error_buff:
                 error_array.append(err[0])
             integ_error = np.trapz(error_array)
+            print "computed integ error: ", integ_error
 
         # Compute the steering angle as the sum of the pid errors
         # YOUR CODE HERE
-        return self.kp*error + self.ki*integ_error + self.kd * deriv_error
+        return -(self.kp*error + self.ki*integ_error + self.kd * deriv_error)
     
     '''
     Callback for the current pose of the car
@@ -205,10 +209,16 @@ class LineFollower:
     This is the exact callback that we used in our solution, but feel free to change it
     '''
     def pose_cb(self, msg):
+        print ""
+        time.sleep(0)
+        print "Callback received current pose. "
         cur_pose = np.array([msg.pose.position.x,
                              msg.pose.position.y,
                              utils.quaternion_to_angle(msg.pose.orientation)])
+        print "Current pose: ", cur_pose
+
         success, error = self.compute_error(cur_pose)
+        print "Success, Error: ", success, error
 
         if not success:
             # We have reached our goal
@@ -264,15 +274,13 @@ def main():
 
     # raw_plan is a PoseArray which has an array of geometry_msgs/Pose called poses
 
-    path_len = len(raw_plan.poses)
-
     plan_array = []
 
     for pose in raw_plan.poses:
         plan_array.append(np.array([pose.position.x, pose.position.y, utils.quaternion_to_angle(pose.orientation)]))
 
-    print "len of plan array %d" % len(plan_array)
-    print plan_array
+    print "Len of plan array: %d" % len(plan_array)
+    # print plan_array
 
     try:
         if raw_plan:

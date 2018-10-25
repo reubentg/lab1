@@ -24,11 +24,11 @@
         <param name="plan_topic" type="str" value="/planner_node/car_plan" />
         <param name="pose_topic" type="string" value="/sim_car_pose/pose" />
         <param name="plan_lookahead" type="int" value="5" />
-        <param name="translation_weight" type="double" value="0.5"/>
-        <param name="rotation_weight" type="double" value="0.5" />
+        <param name="translation_weight" type="double" value="1.0"/>
+        <param name="rotation_weight" type="double" value="1.0" />
         <param name="kp" type="double" value="1.0" />
         <param name="ki" type="double" value="0.1" />
-        <param name="kd" type="double" value="0.2" />
+        <param name="kd" type="double" value="0.3" />
         <param name="error_buff_length" type="int" value="10" />
         <param name="speed" type="double" value="1.0" />
     </node>

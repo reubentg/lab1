@@ -59,12 +59,14 @@ class LineFollower:
         # https://docs.python.org/2/library/collections.html#collections.deque
         self.error_buff = collections.deque(maxlen=error_buff_length)
         self.speed = speed
+        self.found_closest_point = False
 
         print "line_follower Initialized!"
         print "plan[0]", self.plan[0]
         print "plan[plan_lookahead]", self.plan[plan_lookahead]
         print "error_buff length: ", len(self.error_buff)
         print "error_buff: ", self.error_buff
+
 
         # YOUR CODE HERE
         self.cmd_pub = rospy.Publisher(PUB_TOPIC, AckermannDriveStamped, queue_size=10)  # Create a publisher to PUB_TOPIC
@@ -149,10 +151,10 @@ class LineFollower:
         rotation_matrix_robot_to_x_axis = utils.rotation_matrix(-cur_pose[2])
         look_ahead_position_translated_and_rotated = rotation_matrix_robot_to_x_axis * look_ahead_position_translated
         print "look_ahead_position_translated_and_rotated: ", look_ahead_position_translated_and_rotated
-        x_error = look_ahead_position_translated_and_rotated[0][0] # This is the distance that the robot is behind the lookahead point parallel to the path
-        y_error = look_ahead_position_translated_and_rotated[1][0] # This is the distance away from the path, perpendicular from the path to the robot
-        translation_error = -1 * math.tan(y_error / x_error) * math.pi / 180 # angle in rad to drive along hypotenuse toward the look ahead point
-        translation_error *= float(y_error/x_error) # make the robot turn more sharply if far away from path
+        x_error = float(look_ahead_position_translated_and_rotated[0][0]) # This is the distance that the robot is behind the lookahead point parallel to the path
+        y_error = float(look_ahead_position_translated_and_rotated[1][0]) # This is the distance away from the path, perpendicular from the path to the robot
+        translation_error = -y_error# math.tan(y_error / x_error) * math.pi / 180 # angle in rad to drive along hypotenuse toward the look ahead point
+        # translation_error *= 10 #float(y_error/x_error) # make the robot turn more sharply if far away from path
 
         # translation_error = np.sqrt(np.square(cur_pose[0] - self.plan[goal_idx][0]) + np.square(cur_pose[1] - self.plan[goal_idx][1]))
 
@@ -227,6 +229,18 @@ class LineFollower:
                              msg.pose.position.y,
                              utils.quaternion_to_angle(msg.pose.orientation)])
         print "Current pose: ", cur_pose
+        # print "plan[:,[0,1]]", type(np.array(self.plan)), np.array(self.plan)[:,[0,1]]
+        # find closest point and delete all points before it in the plan
+        # only done once at the start of following the plan
+        if self.found_closest_point == False:
+            min_path_distance = 999999999 # to find closest path point and delete all points before it
+            for count, position in enumerate(np.array(self.plan)[:,[0,1]]):
+                distance = np.sqrt(np.square(cur_pose[0] - position[0]) + np.square(cur_pose[1] - position[1]))
+                if (distance < min_path_distance):
+                    self.found_closest_point = True
+                    min_path_distance = distance
+                    if count > 0:
+                        self.plan.pop(0)
 
         success, error = self.compute_error(cur_pose)
         print "Success, Error: ", success, error
@@ -298,6 +312,8 @@ def main():
             pass
     except rospy.ROSException:
         exit(1)
+
+
 
     lf = LineFollower(plan_array, pose_topic, plan_lookahead, translation_weight,
                       rotation_weight, kp, ki, kd, error_buff_length, speed)  # Create a Line follower

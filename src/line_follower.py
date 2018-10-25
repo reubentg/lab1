@@ -152,7 +152,7 @@ class LineFollower:
         x_error = look_ahead_position_translated_and_rotated[0][0] # This is the distance that the robot is behind the lookahead point parallel to the path
         y_error = look_ahead_position_translated_and_rotated[1][0] # This is the distance away from the path, perpendicular from the path to the robot
         translation_error = -1 * math.tan(y_error / x_error) * math.pi / 180 # angle in rad to drive along hypotenuse toward the look ahead point
-        translation_error *= y_error/x_error # make the robot turn more sharply if far away from path
+        translation_error *= float(y_error/x_error) # make the robot turn more sharply if far away from path
 
         # translation_error = np.sqrt(np.square(cur_pose[0] - self.plan[goal_idx][0]) + np.square(cur_pose[1] - self.plan[goal_idx][1]))
 

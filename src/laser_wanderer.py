@@ -131,7 +131,7 @@ class LaserWanderer:
         #       delta_costs[n] += cost of the t=traj_depth step of trajectory n
         #   traj_depth += 1
         # YOUR CODE HERE
-        print 'inside waner_cb'
+        print 'inside wander_cb'
         # Find the delta that has the smallest cost and execute it by publishing
         # YOUR CODE HERE
     
@@ -153,12 +153,10 @@ def kinematic_model_step(pose, control, car_length):
     x = pose[0]
     y = pose[1]
     theta = pose[2]
-    control = control
-    car_length = car_length
-    q = np.matrix([x], [y], [theta] )           #robot posture in base frame
-    R = np.matrix([np.cos(theta), -np.sin(theta), 0], [np.sin(theta), np.cos(theta), 0], [0, 0, 1])
+    q = np.matrix([x], [y])           #robot posture in base frame
+    R = utils.rotation_matrix(theta)
 
-   # pose_translated = q[]*R[]
+    # pose_translated = q[]*R[]
 
 
 

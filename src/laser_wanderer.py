@@ -150,6 +150,18 @@ def kinematic_model_step(pose, control, car_length):
     # Make sure your resulting theta is between 0 and 2*pi
     # Consider the case where delta == 0.0
 
+    x = pose[0]
+    y = pose[1]
+    theta = pose[2]
+    control = control
+    car_length = car_length
+    q = np.matrix([x], [y], [theta] )           #robot posture in base frame
+    R = np.matrix([np.cos(theta), -np.sin(theta), 0], [np.sin(theta), np.cos(theta), 0], [0, 0, 1])
+
+   # pose_translated = q[]*R[]
+
+
+
     # YOUR CODE HERE
     pass
     

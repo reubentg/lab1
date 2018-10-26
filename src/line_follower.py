@@ -118,17 +118,17 @@ class LineFollower:
                 self.plan.pop(0) # delete the first element in the path, since that point is behind robot and it's direction is similar to robot
                 print "element deleted? : ", len(self.plan) # for troubleshooting, show path points after deleting
 
+            if len(self.plan) > 0:
+                PS = PoseStamped() # create a PoseStamped() msg
+                PS.header.stamp = rospy.Time.now() # set header timestamp value
+                PS.header.frame_id = "map" # set header frame id value
+                goal_idx = min(0+self.plan_lookahead, len(self.plan)-1) # get goal index for looking ahead this many indices in the path
+                PS.pose.position.x = self.plan[goal_idx][0] # set msg x position to value of the x position in the look ahead pose from the path
+                PS.pose.position.y = self.plan[goal_idx][1] # set msg y position to value of the y position in the look ahead pose from the path
+                PS.pose.position.z = 0 # set msg z position to 0 since robot is on the ground
+                PS.pose.orientation = utils.angle_to_quaternion(self.plan[goal_idx][2]) # set msg orientation to [converted to queternion] value of the yaw angle in the look ahead pose from the path
 
-            PS = PoseStamped() # create a PoseStamped() msg
-            PS.header.stamp = rospy.Time.now() # set header timestamp value
-            PS.header.frame_id = "map" # set header frame id value
-            goal_idx = min(0+self.plan_lookahead, len(self.plan)-1) # get goal index for looking ahead this many indices in the path
-            PS.pose.position.x = self.plan[goal_idx][0] # set msg x position to value of the x position in the look ahead pose from the path
-            PS.pose.position.y = self.plan[goal_idx][1] # set msg y position to value of the y position in the look ahead pose from the path
-            PS.pose.position.z = 0 # set msg z position to 0 since robot is on the ground
-            PS.pose.orientation = utils.angle_to_quaternion(self.plan[goal_idx][2]) # set msg orientation to [converted to queternion] value of the yaw angle in the look ahead pose from the path
-
-            self.goal_pub.publish(PS) # publish look ahead follower, now you can add a Pose with topic of PUB_TOPIC_2 value in rviz
+                self.goal_pub.publish(PS) # publish look ahead follower, now you can add a Pose with topic of PUB_TOPIC_2 value in rviz
 
         # Check if the plan is empty. If so, return (False, 0.0)
         # YOUR CODE HERE
@@ -232,6 +232,7 @@ class LineFollower:
                              msg.pose.position.y,
                              utils.quaternion_to_angle(msg.pose.orientation)])
         print "Current pose: ", cur_pose
+
         # print "plan[:,[0,1]]", type(np.array(self.plan)), np.array(self.plan)[:,[0,1]]
         # find closest point and delete all points before it in the plan
         # only done once at the start of following the plan
@@ -253,8 +254,21 @@ class LineFollower:
             self.pose_sub = None  # Kill the subscriber
             self.speed = 0.0  # Set speed to zero so car stops
             # plot the error here
-            plt.plot(self.total_error_list)
+            title_string = "Error plot with kp=%.2f, kd=%.2f, ki=%.2f t_w=%.2f r_w=%.2f" % \
+                           (self.kp, self.kd, self.ki, self.translation_weight, self.rotation_weight)
+
+            fig = plt.figure()
+            ax = fig.add_subplot(111) #
+            ax.plot(self.total_error_list)
+            plt.title(title_string)
+            plt.text(0.5,0.85, 'Total error = %.2f' % np.trapz(abs(np.array(self.total_error_list))), horizontalalignment='center',
+                     verticalalignment='center', transform = ax.transAxes)
+            plt.xlabel('Iterations')
+            plt.ylabel('Error')
             plt.show()
+
+            np.savetxt("fish_Error1.csv", np.array(self.total_error_list), delimiter=",")
+
             return 0
 
         delta = self.compute_steering_angle(error)

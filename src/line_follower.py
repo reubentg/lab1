@@ -7,6 +7,7 @@ import time
 
 import rospy
 import numpy as np
+import matplotlib.pyplot as plt
 from geometry_msgs.msg import PoseArray, PoseStamped
 from ackermann_msgs.msg import AckermannDriveStamped
 
@@ -60,6 +61,7 @@ class LineFollower:
         self.error_buff = collections.deque(maxlen=error_buff_length)
         self.speed = speed
         self.found_closest_point = False
+        self.total_error_list = []
 
         print "line_follower Initialized!"
         print "plan[0]", self.plan[0]
@@ -170,6 +172,7 @@ class LineFollower:
 
         error = self.translation_weight * translation_error + self.rotation_weight * rotation_error
         print "Overall error: ", error
+        self.total_error_list.append(error)
 
         return True, error
     
@@ -233,10 +236,10 @@ class LineFollower:
         # find closest point and delete all points before it in the plan
         # only done once at the start of following the plan
         if self.found_closest_point == False:
-            min_path_distance = 999999999 # to find closest path point and delete all points before it
+            min_path_distance = np.Infinity  # to find closest path point and delete all points before it
             for count, position in enumerate(np.array(self.plan)[:,[0,1]]):
                 distance = np.sqrt(np.square(cur_pose[0] - position[0]) + np.square(cur_pose[1] - position[1]))
-                if (distance < min_path_distance):
+                if distance < min_path_distance:
                     self.found_closest_point = True
                     min_path_distance = distance
                     if count > 0:
@@ -249,6 +252,10 @@ class LineFollower:
             # We have reached our goal
             self.pose_sub = None  # Kill the subscriber
             self.speed = 0.0  # Set speed to zero so car stops
+            # plot the error here
+            plt.plot(self.total_error_list)
+            plt.show()
+            return 0
 
         delta = self.compute_steering_angle(error)
 

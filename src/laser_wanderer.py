@@ -53,7 +53,7 @@ class LaserWanderer:
         self.show_all_poses = False # if true all poses will be vizualized, if false only final pose
 
         # TODO: Double check the fields below
-        self.cmd_pub = rospy.Publisher(CMD_TOPIC, AckermannDriveStamped, queue_size=1)
+        self.cmd_pub = rospy.Publisher(CMD_TOPIC, AckermannDriveStamped, queue_size=10)
 
         # Create a subscriber to laser scans that uses the self.wander_cb callback
         self.laser_sub = rospy.Subscriber(SCAN_TOPIC, LaserScan, self.wander_cb)
@@ -73,7 +73,7 @@ class LaserWanderer:
     def viz_sub_cb(self, msg):
         # Create the PoseArray to publish. Will contain N poses, where the n-th pose
         # represents the last pose in the n-th trajectory
-        print "inside viz_sub_cb"
+        # print "inside viz_sub_cb"
 
         cur_pose = np.array([msg.pose.position.x,
                              msg.pose.position.y,
@@ -83,7 +83,6 @@ class LaserWanderer:
             pose_range = range(0, self.rollouts.shape[1])
         else: # only final pose in each rollout
             pose_range = range(self.rollouts.shape[1] - 2, self.rollouts.shape[1])
-        print "pose_range", pose_range
 
         # Read http://docs.ros.org/jade/api/geometry_msgs/html/msg/PoseArray.html
         PA = PoseArray() # create a PoseArray() msg
@@ -117,10 +116,10 @@ class LaserWanderer:
                 P.position.x = map_position[0]
                 P.position.y = map_position[1]
                 P.position.z = 0
-                P.orientation = utils.angle_to_quaternion(pose[2] + cur_pose[2])
+                P.orientation = utils.angle_to_quaternion(pose[2] + cur_pose[2]) # car's yaw angle + rollout pose's angle from car
 
                 PA.poses.append(P)
-        print "Publishing Rollout Vizualization"
+        # print "Publishing Rollout Vizualization"
         self.viz_pub.publish(PA)
 
     '''
@@ -147,7 +146,26 @@ class LaserWanderer:
         NOTE THAT NO COORDINATE TRANSFORMS ARE NECESSARY INSIDE OF THIS FUNCTION
         """
         # YOUR CODE HERE
-        pass
+        cost = abs(delta)
+        angle = math.atan2(rollout_pose[1], rollout_pose[0])
+        laser_ray_index = int(round((angle - laser_msg.angle_min) / laser_msg.angle_increment))
+        pose_dist = math.pow(rollout_pose[0], 2) + math.pow(rollout_pose[1], 2)
+        laser_dist = laser_msg.ranges[laser_ray_index]
+        if math.isnan(laser_dist) or laser_dist == 0.0:
+            laser_dist = np.Inf
+        if delta == -0.34:
+            print "Ranges: %.2f" % laser_dist,
+        elif delta == 0.34:
+            print "%.2f" % laser_dist
+            print ", pose_dist: ", pose_dist
+            print ""
+        else:
+            print "%.2f" % laser_dist,
+
+        if laser_dist - np.abs(self.laser_offset) > pose_dist:
+            cost += MAX_PENALTY
+        return cost
+
     
     '''
     Controls the steering angle in response to the received laser scan. Uses approximately
@@ -155,14 +173,30 @@ class LaserWanderer:
     msg: A LaserScan
     '''
     def wander_cb(self, msg):
-        print 'Inside wander_cb'
+        # print 'Inside wander_cb'
+        # print "LaserScan MSG: ", type(msg)
+        # print "msg.ranges", type(np.array(msg.ranges)), np.array(msg.ranges).shape
+        # rosmsg show sensor_msgs/LaserScan
+        # std_msgs/Header header
+        #   uint32 seq
+        #   time stamp
+        #   string frame_id
+        # float32 angle_min
+        # float32 angle_max
+        # float32 angle_increment
+        # float32 time_increment
+        # float32 scan_time
+        # float32 range_min
+        # float32 range_max
+        # float32[] ranges
+        # float32[] intensities
 
 
         start = rospy.Time.now().to_sec()  # Get the time at which this function started
 
         # A N dimensional matrix that should be populated with the costs of each
         # trajectory up to time t <= T
-        delta_costs = np.zeros(self.deltas.shape[0], dtype=np.float)
+        delta_costs = np.zeros(self.deltas.shape[0], dtype=np.float) # array([ 0.,  0.,  0.,  0.,  0.,  0.,  0.])
         traj_depth = 0
 
         # Evaluate the cost of each trajectory. Each iteration of the loop should calculate
@@ -175,10 +209,26 @@ class LaserWanderer:
         #       delta_costs[n] += cost of the t=traj_depth step of trajectory n
         #   traj_depth += 1
         # YOUR CODE HERE
+        while rospy.Time.now().to_sec() - start < self.compute_time and traj_depth < self.rollouts.shape[1]:
+            # print "While loop in wander_cb w: ", (rospy.Time.now().to_sec() - start)
+            for i in range(0, self.rollouts.shape[0]): # for each [7] rollouts
+                # print "Compute cost for rollout #", i, ", traj_depth #", traj_depth
+                delta_costs[i] += self.compute_cost(self.deltas[i], self.rollouts[i, traj_depth, :], msg)
+            traj_depth += 1
+
 
         # Find the delta that has the smallest cost and execute it by publishing
         # YOUR CODE HERE
-    
+        min_delta_cost_index = np.argmin(delta_costs)
+        delta = self.deltas[min_delta_cost_index]
+
+        # Setup the control message
+        ads = AckermannDriveStamped()
+        ads.header.frame_id = '/map'
+        ads.header.stamp = rospy.Time.now()
+        ads.drive.steering_angle = delta
+        ads.drive.speed = self.speed
+        self.cmd_pub.publish(ads)
 
 '''
 Apply the kinematic model to the passed pose and control
@@ -234,17 +284,11 @@ def generate_rollout(init_pose, controls, car_length):
     # create array to hold rollout result
     rollout = np.zeros([300,3])
     for i in xrange(300):
-        print ""
-        print "Creating rollout pose #", i
-
         v = controls[i, 0]
         delta = controls[i, 1]
         dt = controls[i, 2]
-        print "v, delta, dt", v, delta, dt
         beta = math.atan((1.0 / 2.0) * math.tan(delta))
-        print "beta", beta
         theta = theta_t_minus_1 + v / car_length * math.sin(2 * beta * dt)
-        print "theta", theta
         if beta == 0 and theta == 0:
             xt = xt_minus_1 + v * dt # distance = speed * time
             yt = 0 # no change in y because we are going straight along the x axis in the car's frame
@@ -260,8 +304,6 @@ def generate_rollout(init_pose, controls, car_length):
 
         # save rollout pose i
         rollout[i,:] = [xt, yt, theta]
-    print "returning rollout"
-    print ""
     return rollout
 
 

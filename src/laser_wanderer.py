@@ -50,6 +50,7 @@ class LaserWanderer:
         self.speed = speed
         self.compute_time = compute_time
         self.laser_offset = laser_offset
+        self.show_all_poses = False # if true all poses will be vizualized, if false only final pose
 
         # TODO: Double check the fields below
         self.cmd_pub = rospy.Publisher(CMD_TOPIC, AckermannDriveStamped, queue_size=1)
@@ -61,7 +62,7 @@ class LaserWanderer:
         self.viz_pub = rospy.Publisher(VIZ_TOPIC, PoseArray)
 
         # Create a subscriber to the current position of the car
-        self.viz_sub = rospy.Subscriber(POSE_TOPIC, PoseStamped)
+        self.viz_sub = rospy.Subscriber(POSE_TOPIC, PoseStamped, self.viz_sub_cb)
         # NOTE THAT THIS VIZUALIZATION WILL ONLY WORK IN SIMULATION. Why?
     
     '''
@@ -69,18 +70,58 @@ class LaserWanderer:
     Only display the last pose of each rollout to prevent lagginess
     msg: A PoseStamped representing the current pose of the car
     '''
-    def viz_sub(self, msg):
+    def viz_sub_cb(self, msg):
         # Create the PoseArray to publish. Will contain N poses, where the n-th pose
         # represents the last pose in the n-th trajectory
-        pa = PoseArray()
-        pa.header.frame_id = '/map'
-        pa.header.stamp = rospy.Time.now()
+        print "inside viz_sub_cb"
 
-        # Transform the last pose of each trajectory to be w.r.t the world and insert into
-        # the pose array
-        # YOUR CODE HERE
+        cur_pose = np.array([msg.pose.position.x,
+                             msg.pose.position.y,
+                             utils.quaternion_to_angle(msg.pose.orientation)]) # current car pose
 
-        self.viz_pub.publish(pa)
+        if self.show_all_poses: # all poses in each rollout
+            pose_range = range(0, self.rollouts.shape[1])
+        else: # only final pose in each rollout
+            pose_range = range(self.rollouts.shape[1] - 2, self.rollouts.shape[1])
+        print "pose_range", pose_range
+
+        # Read http://docs.ros.org/jade/api/geometry_msgs/html/msg/PoseArray.html
+        PA = PoseArray() # create a PoseArray() msg
+        PA.header.stamp = rospy.Time.now() # set header timestamp value
+        PA.header.frame_id = "map" # set header frame id value
+        PA.poses = []
+
+        for i in range(0, self.rollouts.shape[0]): # for each [7] rollouts
+            for j in pose_range: # for pose in range(0, 300) to show all, or range(299,300) to show only final pose
+                P = Pose()
+                pose = self.rollouts[i, j, :] # self.rollouts[i, 299, :] will be an array of [x, y, theta] for the final pose (last j index) for rollout i
+
+                # This is in car frame, so assumes straight is x axis
+                # P.position.x = pose[0]
+                # P.position.y = pose[1]
+                # P.position.z = 0
+                # P.orientation = utils.angle_to_quaternion(pose[2])
+
+                # Transform pose from car frame to map frame
+
+                # Method 1: Map Frame to Robot Frame
+                # Rotation must be done before translation with this method, but it's ok to do both in one step
+                # First find translation matrix [2, 1] from map origin to robot position
+                # Second find rotation matrix [2, 2] from map x axis to robot x axis
+                # Third rotate the rollout position about the origin of the robot axis [a.k.a. robot position] with the same angle as from map x axis to robot x axis
+                # Fourth translate the rollout position with the same translation matrix as from the map origin to the robot position
+                translation_map_to_robot = np.array([[cur_pose[0]], [cur_pose[1]]]).reshape([2, 1])
+                rotation_matrix_map_to_robot = utils.rotation_matrix(cur_pose[2])
+                rollout_position = np.array([[pose[0]], [pose[1]]]).reshape([2, 1])
+                map_position = rotation_matrix_map_to_robot * rollout_position + translation_map_to_robot
+                P.position.x = map_position[0]
+                P.position.y = map_position[1]
+                P.position.z = 0
+                P.orientation = utils.angle_to_quaternion(pose[2] + cur_pose[2])
+
+                PA.poses.append(P)
+        print "Publishing Rollout Vizualization"
+        self.viz_pub.publish(PA)
 
     '''
     Compute the cost of one step in the trajectory. It should penalize the magnitude
@@ -114,6 +155,9 @@ class LaserWanderer:
     msg: A LaserScan
     '''
     def wander_cb(self, msg):
+        print 'Inside wander_cb'
+
+
         start = rospy.Time.now().to_sec()  # Get the time at which this function started
 
         # A N dimensional matrix that should be populated with the costs of each
@@ -131,7 +175,7 @@ class LaserWanderer:
         #       delta_costs[n] += cost of the t=traj_depth step of trajectory n
         #   traj_depth += 1
         # YOUR CODE HERE
-        print 'inside wander_cb'
+
         # Find the delta that has the smallest cost and execute it by publishing
         # YOUR CODE HERE
     
@@ -174,8 +218,51 @@ Returns a Tx3 matrix where the t-th row corresponds to the robot's pose at time 
 
 
 def generate_rollout(init_pose, controls, car_length):
-    # YOUR CODE HERE
-    pass
+    # init_pose: array([ 0.,  0.,  0.]) where [x_t-1, y_t-1, theta_t-1]
+    # controls: controls.shape (300, 3): 300 controls, each control has [v, delta, dt]
+    # car_length: 0.33
+    # returns a [300, 3] rollout: 300 poses with [x, y, theta]
+
+    # print "controls", type(controls), controls.shape
+    # print "controls[1][0]", type(controls[1][0]), controls[1][0] # TODO: find out what the difference is
+    # print "controls[1,0]", type(controls[1,0]), controls[1,0]
+
+    # use initial pose as the previous pose in the first loop iteration
+    theta_t_minus_1 = init_pose[2]
+    xt_minus_1 = init_pose[0]
+    yt_minus_1 = init_pose[1]
+    # create array to hold rollout result
+    rollout = np.zeros([300,3])
+    for i in xrange(300):
+        print ""
+        print "Creating rollout pose #", i
+
+        v = controls[i, 0]
+        delta = controls[i, 1]
+        dt = controls[i, 2]
+        print "v, delta, dt", v, delta, dt
+        beta = math.atan((1.0 / 2.0) * math.tan(delta))
+        print "beta", beta
+        theta = theta_t_minus_1 + v / car_length * math.sin(2 * beta * dt)
+        print "theta", theta
+        if beta == 0 and theta == 0:
+            xt = xt_minus_1 + v * dt # distance = speed * time
+            yt = 0 # no change in y because we are going straight along the x axis in the car's frame
+        else:
+            xt = xt_minus_1 + car_length / math.sin(2 * beta) * (math.sin(theta) - math.sin(theta_t_minus_1))
+            # print "xt,", xt
+            yt = yt_minus_1 + car_length / math.sin(2 * beta) * (-math.cos(theta) + math.cos(theta_t_minus_1))
+            # print "yt", yt
+        # use current pose as the previous pose in the next loop iteration
+        theta_t_minus_1 = theta
+        xt_minus_1 = xt
+        yt_minus_1 = yt
+
+        # save rollout pose i
+        rollout[i,:] = [xt, yt, theta]
+    print "returning rollout"
+    print ""
+    return rollout
 
 
 '''
@@ -195,24 +282,24 @@ pose of the car at time t+1
 
 def generate_mpc_rollouts(speed, min_delta, max_delta, delta_incr, dt, T, car_length):
 
-    deltas = np.arange(min_delta, max_delta, delta_incr)
-    N = deltas.shape[0]
+    deltas = np.arange(min_delta, max_delta, delta_incr) # array([-0.34, -0.22666667, -0.11333333,  0.,  0.11333333, 0.22666667,  0.34      ])
+    N = deltas.shape[0] # 7
 
-    init_pose = np.array([0.0, 0.0, 0.0], dtype=np.float)
+    init_pose = np.array([0.0, 0.0, 0.0], dtype=np.float) # array([ 0.,  0.,  0.])
 
-    rollouts = np.zeros((N, T, 3), dtype=np.float)
-    for i in xrange(N):
-        controls = np.zeros((T, 3), dtype=np.float)
-        controls[:, 0] = speed
-        controls[:, 1] = deltas[i]
-        controls[:, 2] = dt
-        rollouts[i, :, :] = generate_rollout(init_pose, controls, car_length)
+    rollouts = np.zeros((N, T, 3), dtype=np.float) # rollout.shape (7, 300, 3): 7 rollouts, 300 poses each, each pose has [x, y, theta]
+    for i in xrange(N): # for each rollout [yet-to-be-created]
+        controls = np.zeros((T, 3), dtype=np.float) # controls.shape (300, 3): 300 controls, each control has [v, delta, dt]
+        controls[:, 0] = speed # velocity as a number, not vector
+        controls[:, 1] = deltas[i] # delta for each rollout
+        controls[:, 2] = dt # The amount of time to apply a control for
+        rollouts[i, :, :] = generate_rollout(init_pose, controls, car_length) # create rollout
 
     return rollouts, deltas
 
 
 def main():
-
+    print "Laser Wanderer Running!"
     rospy.init_node('laser_wanderer', anonymous=True)
 
     # Load these parameters from launch file
@@ -234,9 +321,11 @@ def main():
     # DO NOT ADD THIS TO YOUR LAUNCH FILE, car_length is already provided by teleop.launch
     car_length = rospy.get_param("car_kinematics/car_length", 0.33)
 
+    print "Generating Rollouts"
     # Generate the rollouts
     rollouts, deltas = generate_mpc_rollouts(speed, min_delta, max_delta, delta_incr, dt, T, car_length)
 
+    print "Constructing Laser Wanderer"
     # Create the LaserWanderer
     lw = LaserWanderer(rollouts, deltas, speed, compute_time, laser_offset)
 

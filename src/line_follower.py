@@ -267,7 +267,7 @@ class LineFollower:
             plt.ylabel('Error')
             plt.show()
 
-            np.savetxt("fish_Error1.csv", np.array(self.total_error_list), delimiter=",")
+            np.savetxt("/home/joe/Desktop/Error_3.csv", np.array(self.total_error_list), delimiter=",")
 
             return 0
 

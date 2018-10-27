@@ -151,6 +151,8 @@ class LaserWanderer:
         laser_ray_index = int(round((angle - laser_msg.angle_min) / laser_msg.angle_increment))
         pose_dist = math.pow(rollout_pose[0], 2) + math.pow(rollout_pose[1], 2)
         laser_dist = laser_msg.ranges[laser_ray_index]
+
+
         if math.isnan(laser_dist) or laser_dist == 0.0:
             laser_dist = np.Inf
         if delta == -0.34:
@@ -162,11 +164,10 @@ class LaserWanderer:
         else:
             print "%.2f" % laser_dist,
 
-        if laser_dist - np.abs(self.laser_offset) > pose_dist:
+        if laser_dist - np.abs(self.laser_offset) < pose_dist:
             cost += MAX_PENALTY
         return cost
 
-    
     '''
     Controls the steering angle in response to the received laser scan. Uses approximately
     self.compute_time amount of time to compute the control
@@ -214,6 +215,7 @@ class LaserWanderer:
             for i in range(0, self.rollouts.shape[0]): # for each [7] rollouts
                 # print "Compute cost for rollout #", i, ", traj_depth #", traj_depth
                 delta_costs[i] += self.compute_cost(self.deltas[i], self.rollouts[i, traj_depth, :], msg)
+              #  print "computed cost for traj depth# ", traj_depth, " rollout# " , i, ", cost sum # " , delta_costs[1]
             traj_depth += 1
 
 

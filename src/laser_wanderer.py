@@ -62,7 +62,7 @@ class LaserWanderer:
         self.viz_pub = rospy.Publisher(VIZ_TOPIC, PoseArray)
 
         # Create a subscriber to the current position of the car
-        self.viz_sub = rospy.Subscriber(POSE_TOPIC, PoseStamped, self.viz_sub_cb)
+        # self.viz_sub = rospy.Subscriber(POSE_TOPIC, PoseStamped, self.viz_sub_cb)
         # NOTE THAT THIS VIZUALIZATION WILL ONLY WORK IN SIMULATION. Why?
     
     '''

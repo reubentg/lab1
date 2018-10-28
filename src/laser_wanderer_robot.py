@@ -237,19 +237,17 @@ class LaserWanderer:
         min_delta_cost_index = np.argmin(delta_costs)
         delta = self.deltas[min_delta_cost_index]
 
+        print "chosen rollout index: %d" % min_delta_cost_index
 
-        if delta != 0:
-            # Setup the control message
-            ads = AckermannDriveStamped()
-            ads.header.frame_id = '/map'
-            ads.header.stamp = rospy.Time.now()
-            ads.drive.steering_angle = delta
-            ads.drive.speed = 0 #self.speed
-            self.cmd_pub.publish(ads)
-            print "sent control message w/ angle", delta
-            # print "costs:", delta_costs / 10000
-        else:
-            print "did not send control w/ angle", delta
+        # Setup the control message
+        ads = AckermannDriveStamped()
+        ads.header.frame_id = '/map'
+        ads.header.stamp = rospy.Time.now()
+        ads.drive.steering_angle = delta
+        ads.drive.speed = 0 #self.speed
+        self.cmd_pub.publish(ads)
+        # print "costs:", delta_costs / 10000
+
 
 '''
 Apply the kinematic model to the passed pose and control

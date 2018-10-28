@@ -371,10 +371,13 @@ def generate_mpc_rollouts(speed, min_delta, max_delta, delta_incr, dt, T, car_le
         # shift only the middle rollouts to the car edges
         if i >= math.floor(N / 2)-1 and i <= math.floor(N / 2):
             for depth in range(rollouts[i, :, :].shape[0]):
-                rollouts[i, depth, :][1] -= car_length *2
+                rollouts[i, depth, :][1] -= car_length / 2
         if i >= math.ceil(N / 2) and i <= math.ceil(N / 2) +1:
             for depth in range(rollouts[i, :, :].shape[0]):
-                rollouts[i, depth, :][1] += car_length *2
+                rollouts[i, depth, :][1] += car_length / 2
+        for depth in range(rollouts[i, :, :].shape[0]):
+            rollouts[i, depth, :][0] += car_length / 2
+
 
         # ind_mid_minus_1 = math.floor(N / 2)
         # ind_mid = ind_mid_minus_1 + 1

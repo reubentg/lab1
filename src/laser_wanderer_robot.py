@@ -237,7 +237,8 @@ class LaserWanderer:
         min_delta_cost_index = np.argmin(delta_costs)
         delta = self.deltas[min_delta_cost_index]
 
-        print "chosen rollout index: %d" % min_delta_cost_index
+        # print "chosen rollout index: %d" % min_delta_cost_index
+        
 
         # Setup the control message
         ads = AckermannDriveStamped()
@@ -246,7 +247,7 @@ class LaserWanderer:
         ads.drive.steering_angle = delta
         ads.drive.speed = self.speed
         self.cmd_pub.publish(ads)
-        # print "costs:", delta_costs / 10000
+        print "costs:", delta_costs
 
 
 '''

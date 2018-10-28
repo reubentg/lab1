@@ -339,6 +339,13 @@ def generate_mpc_rollouts(speed, min_delta, max_delta, delta_incr, dt, T, car_le
         controls[:, 2] = dt # The amount of time to apply a control for
         rollouts[i, :, :] = generate_rollout(init_pose, controls, car_length) # create rollout
 
+        if i <= math.floor(N / 2):
+            for depth in range(rollouts[i, :, :].shape[0]):
+                rollouts[i, depth, :][1] -= car_length / 2
+        if i >= math.ceil(N / 2):
+            for depth in range(rollouts[i, :, :].shape[0]):
+                rollouts[i, depth, :][1] += car_length / 2
+
     return rollouts, deltas
 
 

@@ -244,7 +244,7 @@ class LaserWanderer:
         ads.header.frame_id = '/map'
         ads.header.stamp = rospy.Time.now()
         ads.drive.steering_angle = delta
-        ads.drive.speed = 0 #self.speed
+        ads.drive.speed = self.speed
         self.cmd_pub.publish(ads)
         # print "costs:", delta_costs / 10000
 

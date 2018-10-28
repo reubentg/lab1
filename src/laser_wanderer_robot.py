@@ -350,8 +350,11 @@ def generate_mpc_rollouts(speed, min_delta, max_delta, delta_incr, dt, T, car_le
     # add more front rollouts and then two front rollouts will be moved to car's edges
     # and then the min distance will be used from all front rollouts to represent the forward laser ray
     deltas = np.concatenate((
-        deltas[0:deltas.shape[0] / 2], deltas[(deltas.shape[0] / 2)], deltas[(deltas.shape[0] / 2)],
-        deltas[(deltas.shape[0] / 2)], deltas[(deltas.shape[0] + 1) / 2:deltas.shape[0]]), axis=None)
+      deltas[0:deltas.shape[0] / 2], 
+      deltas[(deltas.shape[0] / 2)], 
+      deltas[(deltas.shape[0] / 2)],
+      deltas[(deltas.shape[0] / 2)], 
+      deltas[(deltas.shape[0] / 2) +1:deltas.shape[0]]), axis=None)
 
     N = deltas.shape[0] # 7 for sim, 9 for robot
 

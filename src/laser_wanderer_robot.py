@@ -155,14 +155,14 @@ class LaserWanderer:
 
         if math.isnan(laser_dist) or laser_dist == 0.0:
             laser_dist = np.Inf
-        if delta == -0.34:
-            print "Ranges: %.2f" % laser_dist,
-        elif delta == 0.34:
-            print "%.2f" % laser_dist
-            print ", pose_dist: ", pose_dist
-            print ""
-        else:
-            print "%.2f" % laser_dist,
+        # if delta == -0.34:
+        #     print "Ranges: %.2f" % laser_dist,
+        # elif delta == 0.34:
+        #     print "%.2f" % laser_dist
+        #     print ", pose_dist: ", pose_dist
+        #     print ""
+        # else:
+        #     print "%.2f" % laser_dist,
 
         if laser_dist - np.abs(self.laser_offset) < pose_dist:
             cost += MAX_PENALTY
@@ -221,16 +221,35 @@ class LaserWanderer:
 
         # Find the delta that has the smallest cost and execute it by publishing
         # YOUR CODE HERE
+        ind_mid_minus_1 = math.floor(delta_costs.shape[0] / 2)
+        ind_mid = ind_mid_minus_1 + 1
+        ind_mid_plus_1 = ind_mid +1
+
+        # max_front_delta_cost = max(
+        #     delta_costs[ind_mid_minus_1],
+        #     delta_costs[ind_mid],
+        #     delta_costs[ind_mid_plus_1]
+        # )
+        # delta_costs[ind_mid_minus_1] = max_front_delta_cost
+        # delta_costs[ind_mid] = max_front_delta_cost
+        # delta_costs[ind_mid_plus_1] = max_front_delta_cost
+
         min_delta_cost_index = np.argmin(delta_costs)
         delta = self.deltas[min_delta_cost_index]
 
-        # Setup the control message
-        ads = AckermannDriveStamped()
-        ads.header.frame_id = '/map'
-        ads.header.stamp = rospy.Time.now()
-        ads.drive.steering_angle = delta
-        ads.drive.speed = self.speed
-        self.cmd_pub.publish(ads)
+
+        if delta != 0:
+            # Setup the control message
+            ads = AckermannDriveStamped()
+            ads.header.frame_id = '/map'
+            ads.header.stamp = rospy.Time.now()
+            ads.drive.steering_angle = delta
+            ads.drive.speed = 0 #self.speed
+            self.cmd_pub.publish(ads)
+            print "sent control message w/ angle", delta
+            # print "costs:", delta_costs / 10000
+        else:
+            print "did not send control w/ angle", delta
 
 '''
 Apply the kinematic model to the passed pose and control
@@ -327,7 +346,14 @@ pose of the car at time t+1
 def generate_mpc_rollouts(speed, min_delta, max_delta, delta_incr, dt, T, car_length):
 
     deltas = np.arange(min_delta, max_delta, delta_incr) # array([-0.34, -0.22666667, -0.11333333,  0.,  0.11333333, 0.22666667,  0.34      ])
-    N = deltas.shape[0] # 7
+    # array([-0.34, -0.22666667, -0.11333333,  0., 0, 0.,  0.11333333, 0.22666667,  0.34 ])
+    # add more front rollouts and then two front rollouts will be moved to car's edges
+    # and then the min distance will be used from all front rollouts to represent the forward laser ray
+    deltas = np.concatenate((
+        deltas[0:deltas.shape[0] / 2], deltas[(deltas.shape[0] / 2)], deltas[(deltas.shape[0] / 2)],
+        deltas[(deltas.shape[0] / 2)], deltas[(deltas.shape[0] + 1) / 2:deltas.shape[0]]), axis=None)
+
+    N = deltas.shape[0] # 7 for sim, 9 for robot
 
     init_pose = np.array([0.0, 0.0, 0.0], dtype=np.float) # array([ 0.,  0.,  0.])
 
@@ -338,6 +364,27 @@ def generate_mpc_rollouts(speed, min_delta, max_delta, delta_incr, dt, T, car_le
         controls[:, 1] = deltas[i] # delta for each rollout
         controls[:, 2] = dt # The amount of time to apply a control for
         rollouts[i, :, :] = generate_rollout(init_pose, controls, car_length) # create rollout
+
+        # shift only the middle rollouts to the car edges
+        if i >= math.floor(N / 2)-1 and i <= math.floor(N / 2):
+            for depth in range(rollouts[i, :, :].shape[0]):
+                rollouts[i, depth, :][1] -= car_length *2
+        if i >= math.ceil(N / 2) and i <= math.ceil(N / 2) +1:
+            for depth in range(rollouts[i, :, :].shape[0]):
+                rollouts[i, depth, :][1] += car_length *2
+
+        # ind_mid_minus_1 = math.floor(N / 2)
+        # ind_mid = ind_mid_minus_1 + 1
+        # ind_mid_plus_1 = ind_mid + 1
+        # if i == ind_mid_minus_1:
+        #     for depth in range(rollouts[i, :, :].shape[0]):
+        #         rollouts[i, depth, :][1] -= car_length
+        # # elif i == ind_mid:
+        # elif i == ind_mid_plus_1:
+        #     for depth in range(rollouts[i, :, :].shape[0]):
+        #         rollouts[i, depth, :][1] += car_length
+
+
 
     return rollouts, deltas
 

@@ -1,7 +1,7 @@
 <launch>
 
     <node pkg="lab1" type="laser_wanderer.py" name="LaserWand" output="screen">
-        <param name="speed" type="double" value="1.0" />
+        <param name="speed" type="double" value="0.5" />
         <param name="min_delta" type="double" value="-0.34" />
         <param name="max_delta" type="double" value="0.341" />
         <param name="delta_incr" type="double" value="0.11333333333333334" /> <!-- value="0.34/3" -->

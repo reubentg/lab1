@@ -247,6 +247,7 @@ class LaserWanderer:
         ads.drive.steering_angle = delta
         ads.drive.speed = self.speed
         self.cmd_pub.publish(ads)
+        np.set_printoptions(precision=3)
         print "costs:", delta_costs
 
 

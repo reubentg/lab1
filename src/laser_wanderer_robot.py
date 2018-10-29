@@ -324,8 +324,8 @@ def generate_rollout(init_pose, controls, car_length):
 
         # use current pose as the previous pose in the next loop iteration
         theta_t_minus_1 = rollout[i-1][2]
-        xt_minus_1 = rollout[i-1][1]
-        yt_minus_1 = rollout[i-1][0]
+        xt_minus_1 = rollout[i-1][0]
+        yt_minus_1 = rollout[i-1][1]
 
         # save rollout pose i
         rollout[i,:] = kinematic_model_step(np.array([xt_minus_1, yt_minus_1, theta_t_minus_1]),

@@ -271,20 +271,27 @@ def kinematic_model_step(pose, control, car_length):
     # Apply the kinematic model
     # Make sure your resulting theta is between 0 and 2*pi
     # Consider the case where delta == 0.0
+    v = control[0]
+    delta = control[1]
+    dt = control[2]
 
-    x = pose[0]
-    y = pose[1]
-    theta = pose[2]
-    q = np.matrix([x], [y])           #robot posture in base frame
-    R = utils.rotation_matrix(theta)
+    xt_minus_1 = pose[0]
+    yt_minus_1 = pose[1]
+    theta_t_minus_1 = pose[2]
 
-    # pose_translated = q[]*R[]
+    beta = math.atan((1.0 / 2.0) * math.tan(delta))
+    theta = theta_t_minus_1 + v / car_length * math.sin(2 * beta * dt)
+    if beta == 0 and theta == 0:
+        xt = xt_minus_1 + v * dt  # distance = speed * time
+        yt = 0  # no change in y because we are going straight along the x axis in the car's frame
+    else:
+        xt = xt_minus_1 + car_length / math.sin(2 * beta) * (math.sin(theta) - math.sin(theta_t_minus_1))
+        # print "xt,", xt
+        yt = yt_minus_1 + car_length / math.sin(2 * beta) * (-math.cos(theta) + math.cos(theta_t_minus_1))
+        # print "yt", yt
 
+    return np.array([xt, yt, theta])
 
-
-    # YOUR CODE HERE
-    pass
-    
 
 '''
 Repeatedly apply the kinematic model to produce a trajectory for the car
@@ -305,33 +312,25 @@ def generate_rollout(init_pose, controls, car_length):
     # print "controls[1][0]", type(controls[1][0]), controls[1][0] # TODO: find out what the difference is
     # print "controls[1,0]", type(controls[1,0]), controls[1,0]
 
-    # use initial pose as the previous pose in the first loop iteration
-    theta_t_minus_1 = init_pose[2]
-    xt_minus_1 = init_pose[0]
-    yt_minus_1 = init_pose[1]
+    # use initial pose as the previous pose in index 0
     # create array to hold rollout result
     rollout = np.zeros([300,3])
-    for i in xrange(300):
+    rollout[0, :] = kinematic_model_step(init_pose, controls[0], car_length)
+
+    for i in xrange(1, 300):
         v = controls[i, 0]
         delta = controls[i, 1]
         dt = controls[i, 2]
-        beta = math.atan((1.0 / 2.0) * math.tan(delta))
-        theta = theta_t_minus_1 + v / car_length * math.sin(2 * beta * dt)
-        if beta == 0 and theta == 0:
-            xt = xt_minus_1 + v * dt # distance = speed * time
-            yt = 0 # no change in y because we are going straight along the x axis in the car's frame
-        else:
-            xt = xt_minus_1 + car_length / math.sin(2 * beta) * (math.sin(theta) - math.sin(theta_t_minus_1))
-            # print "xt,", xt
-            yt = yt_minus_1 + car_length / math.sin(2 * beta) * (-math.cos(theta) + math.cos(theta_t_minus_1))
-            # print "yt", yt
+
         # use current pose as the previous pose in the next loop iteration
-        theta_t_minus_1 = theta
-        xt_minus_1 = xt
-        yt_minus_1 = yt
+        theta_t_minus_1 = rollout[i-1][2]
+        xt_minus_1 = rollout[i-1][1]
+        yt_minus_1 = rollout[i-1][0]
 
         # save rollout pose i
-        rollout[i,:] = [xt, yt, theta]
+        rollout[i,:] = kinematic_model_step(np.array([xt_minus_1, yt_minus_1, theta_t_minus_1]),
+                                            np.array([v, delta, dt]), car_length)
+
     return rollout
 
 
@@ -371,25 +370,6 @@ def generate_mpc_rollouts(speed, min_delta, max_delta, delta_incr, dt, T, car_le
         controls[:, 1] = deltas[i] # delta for each rollout
         controls[:, 2] = dt # The amount of time to apply a control for
         rollouts[i, :, :] = generate_rollout(init_pose, controls, car_length) # create rollout
-
-        # shift only the middle rollouts to the car edges
-        # if i >= math.floor(N / 2)-1 and i <= math.floor(N / 2):
-        #     for depth in range(rollouts[i, :, :].shape[0]):
-        #         rollouts[i, depth, :][1] -= car_length *2
-        # if i >= math.ceil(N / 2) and i <= math.ceil(N / 2) +1:
-        #     for depth in range(rollouts[i, :, :].shape[0]):
-        #         rollouts[i, depth, :][1] += car_length *2
-
-        # ind_mid_minus_1 = math.floor(N / 2)
-        # ind_mid = ind_mid_minus_1 + 1
-        # ind_mid_plus_1 = ind_mid + 1
-        # if i == ind_mid_minus_1:
-        #     for depth in range(rollouts[i, :, :].shape[0]):
-        #         rollouts[i, depth, :][1] -= car_length
-        # # elif i == ind_mid:
-        # elif i == ind_mid_plus_1:
-        #     for depth in range(rollouts[i, :, :].shape[0]):
-        #         rollouts[i, depth, :][1] += car_length
 
 
 

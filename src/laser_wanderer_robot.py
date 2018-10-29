@@ -160,7 +160,7 @@ class LaserWanderer:
 
 
         if math.isnan(laser_dist) or laser_dist == 0.0:
-            laser_dist = 0 #np.Inf
+            laser_dist = np.Inf
         # if delta == -0.34:
         #     print "Ranges: %.2f" % laser_dist,
         # elif delta == 0.34:

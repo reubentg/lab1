@@ -149,12 +149,18 @@ class LaserWanderer:
         cost = abs(delta)
         angle = math.atan2(rollout_pose[1], rollout_pose[0])
         laser_ray_index = int(round((angle - laser_msg.angle_min) / laser_msg.angle_increment))
+        if delta == 0:
+            cone_angle = 5 # deg
+            aa = int(round((-cone_angle * math.pi / 180 - laser_msg.angle_min) / laser_msg.angle_increment))
+            bb = int(round((cone_angle * math.pi / 180 - laser_msg.angle_min) / laser_msg.angle_increment))
+            laser_dist = np.nanmean(np.array(laser_msg.ranges[aa:bb + 1]))
+        else:
+            laser_dist = laser_msg.ranges[laser_ray_index]
         pose_dist = math.pow(rollout_pose[0], 2) + math.pow(rollout_pose[1], 2)
-        laser_dist = laser_msg.ranges[laser_ray_index]
 
 
         if math.isnan(laser_dist) or laser_dist == 0.0:
-            laser_dist = np.Inf
+            laser_dist = 0 #np.Inf
         # if delta == -0.34:
         #     print "Ranges: %.2f" % laser_dist,
         # elif delta == 0.34:
@@ -167,7 +173,7 @@ class LaserWanderer:
         if laser_dist - np.abs(self.laser_offset) < pose_dist:
             cost += MAX_PENALTY
         return cost
-
+        # return laser_dist
     '''
     Controls the steering angle in response to the received laser scan. Uses approximately
     self.compute_time amount of time to compute the control
@@ -237,8 +243,7 @@ class LaserWanderer:
         min_delta_cost_index = np.argmin(delta_costs)
         delta = self.deltas[min_delta_cost_index]
 
-        # print "chosen rollout index: %d" % min_delta_cost_index
-        
+
 
         # Setup the control message
         ads = AckermannDriveStamped()
@@ -247,8 +252,10 @@ class LaserWanderer:
         ads.drive.steering_angle = delta
         ads.drive.speed = self.speed
         self.cmd_pub.publish(ads)
+        # print "sent control message w/ angle", delta
         np.set_printoptions(precision=1)
-        print "costs:", delta_costs / 10000
+        print "chosen delta", delta
+        print "costs:", delta_costs
 
 
 '''
@@ -349,12 +356,9 @@ def generate_mpc_rollouts(speed, min_delta, max_delta, delta_incr, dt, T, car_le
     # array([-0.34, -0.22666667, -0.11333333,  0., 0, 0.,  0.11333333, 0.22666667,  0.34 ])
     # add more front rollouts and then two front rollouts will be moved to car's edges
     # and then the min distance will be used from all front rollouts to represent the forward laser ray
-    deltas = np.concatenate((
-      deltas[0:deltas.shape[0] / 2], 
-      deltas[(deltas.shape[0] / 2)], 
-      deltas[(deltas.shape[0] / 2)],
-      deltas[(deltas.shape[0] / 2)], 
-      deltas[(deltas.shape[0] / 2) +1:deltas.shape[0]]), axis=None)
+    # deltas = np.concatenate((
+    #     deltas[0:deltas.shape[0] / 2], deltas[(deltas.shape[0] / 2)], deltas[(deltas.shape[0] / 2)],
+    #     deltas[(deltas.shape[0] / 2)], deltas[(deltas.shape[0] + 1) / 2:deltas.shape[0]]), axis=None)
 
     N = deltas.shape[0] # 7 for sim, 9 for robot
 
@@ -369,15 +373,12 @@ def generate_mpc_rollouts(speed, min_delta, max_delta, delta_incr, dt, T, car_le
         rollouts[i, :, :] = generate_rollout(init_pose, controls, car_length) # create rollout
 
         # shift only the middle rollouts to the car edges
-        if i >= math.floor(N / 2)-1 and i <= math.floor(N / 2):
-            for depth in range(rollouts[i, :, :].shape[0]):
-                rollouts[i, depth, :][1] -= car_length / 2
-        if i >= math.ceil(N / 2) and i <= math.ceil(N / 2) +1:
-            for depth in range(rollouts[i, :, :].shape[0]):
-                rollouts[i, depth, :][1] += car_length / 2
-        for depth in range(rollouts[i, :, :].shape[0]):
-            rollouts[i, depth, :][0] += car_length / 2
-
+        # if i >= math.floor(N / 2)-1 and i <= math.floor(N / 2):
+        #     for depth in range(rollouts[i, :, :].shape[0]):
+        #         rollouts[i, depth, :][1] -= car_length *2
+        # if i >= math.ceil(N / 2) and i <= math.ceil(N / 2) +1:
+        #     for depth in range(rollouts[i, :, :].shape[0]):
+        #         rollouts[i, depth, :][1] += car_length *2
 
         # ind_mid_minus_1 = math.floor(N / 2)
         # ind_mid = ind_mid_minus_1 + 1
